@@ -5,7 +5,7 @@
 #include<errno.h>
 #include<regex.h>
 
-#define VERSION "0.1.0"
+#define VERSION "1.0.0"
 #define MAX_SIZE (1024 * 1024)
 
 static char* IGNORE_DIRS[] = {
