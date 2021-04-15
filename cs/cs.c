@@ -29,7 +29,7 @@ struct config getConfig(int argc, char* argv[]) {
 
   char* expr = r.expr;
   int i = 1;
-  while(1) {
+  while(i < argc) {
     expr = stpcpy(expr, argv[i]);
     i++;
     if(i == argc) break;
