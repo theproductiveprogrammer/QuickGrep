@@ -1,14 +1,29 @@
 #include<stdio.h>
+#include<string.h>
 
 int p(char *msg) { return printf("%s\n", msg); }
 
 struct config {
   int help;
+  int ignorecase;
+  char expr[1024];
 };
 
 struct config getConfig(int argc, char* argv[]) {
   struct config r;
-  r.help = 1;
+  r.help = argc < 2;
+
+  char* expr = r.expr;
+  for(int i = 1;i < argc;i++) {
+    expr = stpcpy(expr, argv[i]);
+    *expr = ' ';
+    expr++;
+  }
+
+  r.ignorecase = 1;
+  for(expr = r.expr;*expr;expr++) {
+    if(*expr >= 'A' && *expr <= 'Z') r.ignorecase = 0;
+  }
 
   return r;
 }
