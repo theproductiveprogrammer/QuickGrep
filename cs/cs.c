@@ -5,6 +5,9 @@
 #include<errno.h>
 #include<regex.h>
 
+#define VERSION "0.1.0"
+#define MAX_SIZE (1024 * 1024)
+
 int p(char *msg) { return printf("%s\n", msg); }
 int err(char *fmt, char *msg) {
   if(msg) {
@@ -46,10 +49,11 @@ struct config getConfig(int argc, char* argv[]) {
 }
 
 int showHelp() {
-  p("qcs: Quick Code Search");
-  p("$> qcs <regular expression>");
-  p("      Finds all matches in code/text files");
-  p("      Uses sMartCase (ignores case by default)");
+  p("cs: (Quick) Code Search");
+  p(VERSION);
+  p("$> cs <regular expression>");
+  p("      - finds all matches in code/text files");
+  p("      - uses sMartCase (ignores case by default)");
 
   return 0;
 }
@@ -60,8 +64,6 @@ int fts_err(FTSENT *node) {
       node->fts_info == FTS_NS) return node->fts_errno;
   return 0;
 }
-
-#define MAX_SIZE (1024 * 1024)
 
 int skip(FTSENT *node) {
   if(node->fts_info == FTS_F) {
