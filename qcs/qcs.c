@@ -1,7 +1,8 @@
 #include<stdio.h>
 #include<string.h>
-#include<ftw.h>
-#include<stdint.h>
+#include<sys/stat.h>
+#include<fts.h>
+#include<errno.h>
 
 int p(char *msg) { return printf("%s\n", msg); }
 int err(char *fmt, char *msg) {
@@ -49,39 +50,50 @@ int showHelp() {
   return 0;
 }
 
-static int ignore_base = 0;
-
-static int searchFile(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf) {
-  if(tflag == FTW_D || tflag == FTW_DNR) {
-    if(strcmp(".git", fpath+ftwbuf->base) == 0) ignore_base = ftwbuf->base;
-  }
-  if(ignore_base && ftwbuf->base < ignore_base) ignore_base = 0;
-  if(tflag != FTW_F) return 0;
-  if(!S_ISREG(sb->st_mode)) return 0;
-  if(sb->st_size > 1024 * 1024) printf("Ignoring %s\n", fpath);
-  if(sb->st_size > 1024 * 1024) return 0;
-  if(strncmp(".git", fpath + ignore_base, 4) == 0) printf("Ignoring %s\n", fpath);
-  /*
-    printf("%-3s %2d %7jd   %-40s %d %s\n",
-        (tflag == FTW_D) ?   "d"   : (tflag == FTW_DNR) ? "dnr" :
-        (tflag == FTW_DP) ?  "dp"  : (tflag == FTW_F) ?
-            (S_ISBLK(sb->st_mode) ? "f b" :
-             S_ISCHR(sb->st_mode) ? "f c" :
-             S_ISFIFO(sb->st_mode) ? "f p" :
-             S_ISREG(sb->st_mode) ? "f r" :
-             S_ISSOCK(sb->st_mode) ? "f s" : "f ?") :
-        (tflag == FTW_NS) ?  "ns"  : (tflag == FTW_SL) ?  "sl" :
-        (tflag == FTW_SLN) ? "sln" : "?",
-        ftwbuf->level, (intmax_t) sb->st_size,
-        fpath, ftwbuf->base, fpath + ftwbuf->base);*/
-    return 0;            
+int fts_err(FTSENT *node) {
+  if(node->fts_info == FTS_DNR ||
+      node->fts_info == FTS_ERR ||
+      node->fts_info == FTS_NS) return node->fts_errno;
+  return 0;
 }
 
+int skip(FTSENT *node) {
+  if(node->fts_info == FTS_F) {
+    return node->fts_statp->st_size > 1024 * 1024;
+  }
+  if(strcmp(".git", node->fts_name) == 0) return 1;
+  if(strcmp("node_modules", node->fts_name) == 0) return 1;
+  return 0;
+}
+
+void grep(char *fullpath, char *currpath) {
+  printf("%s\n", fullpath+2);
+}
 
 int search(struct config config) {
-  int r = nftw(".", searchFile, 20, 0);
-  if(r == -1) return err("Failed walking directory", NULL);
-  else return r;
+  char * curr[] = {".", 0};
+  FTS *tree = fts_open(curr, FTS_LOGICAL, 0);
+  if(!tree) return err("Failed opening directory", NULL);
+
+  FTSENT *node;
+  errno = 0;
+  while((node = fts_read(tree))) {
+    errno = fts_err(node);
+    if(errno) {
+      err("Error walking %s", node->fts_path);
+      errno = 0;
+    } else if(skip(node)) {
+      if(node->fts_info == FTS_D) fts_set(tree, node, FTS_SKIP);
+    } else {
+      if(node->fts_info == FTS_F) {
+        grep(node->fts_path, node->fts_accpath);
+      }
+    }
+  }
+  fts_close(tree);
+  if(errno) return err("Failed walking directory", NULL);
+
+  return 0;
 }
 
 /*    way/
