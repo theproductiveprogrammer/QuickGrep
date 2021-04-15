@@ -57,17 +57,35 @@ int fts_err(FTSENT *node) {
   return 0;
 }
 
+#define MAX_SIZE (1024 * 1024)
+
 int skip(FTSENT *node) {
   if(node->fts_info == FTS_F) {
-    return node->fts_statp->st_size > 1024 * 1024;
+    return node->fts_statp->st_size > MAX_SIZE;
   }
   if(strcmp(".git", node->fts_name) == 0) return 1;
   if(strcmp("node_modules", node->fts_name) == 0) return 1;
   return 0;
 }
 
-void grep(char *fullpath, char *currpath) {
-  printf("%s\n", fullpath+2);
+static char buf[MAX_SIZE];
+int grep(char *path, char *currpath) {
+
+  FILE *f = fopen(currpath, "r");
+  if(!f) return err("Failed opening %s", path);
+  errno = 0;
+  int sz = fread(buf, 1, MAX_SIZE, f);
+  if(errno) {
+    return err("Failed reading %s", path);
+    fclose(f);
+  }
+  fclose(f);
+  buf[sz] = 0;
+
+  int chk = sz > 256 ? 256 : sz;
+  for(int i = 0;i < sz;i++) if(!buf[i]) return 0;
+
+  return 0;
 }
 
 int search(struct config config) {
