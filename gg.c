@@ -105,14 +105,19 @@ int grep(regex_t* rx, char *path, char *currpath) {
     }
     // while(buf[ls] == ' ' || buf[ls] == '\t') ls++;
     s += m->rm_eo;
-    for(;s < sz;s++) {
-      if(buf[s] == '\n') {
-        buf[s] = 0;
-        break;
-      }
+    for(;s < sz;s++) if(buf[s] == '\n') break;
+
+    if(s - ls > 128) {
+      char op[128];
+      memcpy(op, buf+ls, 127);
+      op[124] = op[125] = op[126] = '.';
+      op[127] = 0;
+      printf("%s:%d:%s\n", path, lnum, op);
+    } else {
+      if(s < sz) buf[s] = 0;
+      printf("%s:%d:%s\n", path, lnum, buf+ls);
+      if(s < sz) buf[s] = '\n';
     }
-    printf("%s:%d:%s\n", path, lnum, buf+ls);
-    if(s < sz) buf[s] = '\n';
   }
 
   return 0;
