@@ -8,6 +8,11 @@
 #define VERSION "0.1.0"
 #define MAX_SIZE (1024 * 1024)
 
+static char* IGNORE_DIRS[] = {
+  ".git", ".hg", ".svn", ".bzr",
+  "target", "node_modules"
+};
+
 int p(char *msg) { return printf("%s\n", msg); }
 int err(char *fmt, char *msg) {
   if(msg) {
@@ -69,8 +74,10 @@ int skip(FTSENT *node) {
   if(node->fts_info == FTS_F) {
     return node->fts_statp->st_size > MAX_SIZE;
   }
-  if(strcmp(".git", node->fts_name) == 0) return 1;
-  if(strcmp("node_modules", node->fts_name) == 0) return 1;
+  int num = sizeof(IGNORE_DIRS)/sizeof(IGNORE_DIRS[0]);
+  for(int i = 0;i < num;i++) {
+    if(strcmp(IGNORE_DIRS[i], node->fts_name) == 0) return 1;
+  }
   return 0;
 }
 
