@@ -49,9 +49,9 @@ struct config getConfig(int argc, char* argv[]) {
 }
 
 int showHelp() {
-  p("cs: (Quick) Code Search");
+  p("gg: Quick Grep");
   p(VERSION);
-  p("$> cs <regular expression>");
+  p("$> gg <regular expression>");
   p("      - finds all matches in code/text files");
   p("      - uses sMartCase (ignores case by default)");
 
