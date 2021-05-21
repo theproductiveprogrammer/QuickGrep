@@ -9,7 +9,8 @@
 #include<pthread.h>
 
 #define VERSION "1.1.0"
-#define MAX_FILE_SIZE (2 * 1024 * 1024)
+#define BUF_SIZE (2 * 1024 * 1024)
+#define MAX_FILE_SIZE BUF_SIZE
 
 /*    understand/
  * ignore some standard directories that are generally
@@ -122,7 +123,6 @@ void fl_block_add(char* name, size_t len, struct fl_block* fl_block) {
   fl_block->ndx += len;
   fl_block->num++;
 }
-#define BUF_SIZE (1024 * 1024)
 struct fl_ctx {
   regex_t rx;
   char buf[BUF_SIZE];
