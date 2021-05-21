@@ -50,7 +50,7 @@ struct config {
 
 /*    way/
  * if the user has not provided enough arguments,
- * show him the help. Otherwise take concaternate
+ * show him the help. Otherwise concaternate
  * all the arguments as a single regular expression
  */
 struct config getConfig(int argc, char* argv[]) {
