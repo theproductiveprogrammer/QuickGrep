@@ -290,10 +290,10 @@ int grep(int sz, char* buf, regex_t* rx, char* path) {
       memcpy(op, buf+ls, 127);
       op[124] = op[125] = op[126] = '.';
       op[127] = 0;
-      printf("%s:%d:%s\n", path, lnum, op);
+      printf("%s:%d:%s\n", path+2, lnum, op);
     } else {
       if(s < sz) buf[s] = 0;
-      printf("%s:%d:%s\n", path, lnum, buf+ls);
+      printf("%s:%d:%s\n", path+2, lnum, buf+ls);
       if(s < sz) buf[s] = '\n';
     }
   }
