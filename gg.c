@@ -378,9 +378,15 @@ int searchPipe(struct config *config) {
 }
 
 /*    understand/
- * if the input is not a terminal we assume it's a pipe
+ * if the input is not a terminal and is
+ * a FIFO (cat file | gg) or regular file (gg < file)
  */
-int isPipe() { return !isatty(fileno(stdin)); }
+int isPipe() {
+  if(isatty(fileno(stdin))) return 0;
+  struct stat stats;
+  fstat(fileno(stdin), &stats);
+  return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
+}
 
 /*    way/
  * show help if needed or do the search
