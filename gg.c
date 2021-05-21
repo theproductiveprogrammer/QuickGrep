@@ -9,7 +9,7 @@
 #include<pthread.h>
 
 #define VERSION "1.0.0"
-#define MAX_SIZE (1024 * 1024)
+#define MAX_FILE_SIZE (2 * 1024 * 1024)
 
 /*    understand/
  * ignore some standard directories that are generally
@@ -82,6 +82,15 @@ unsigned int pcthread_get_num_procs()
     return (unsigned int)sysconf(_SC_NPROCESSORS_ONLN);
 }
 
+/*    way/
+ * return a compiled regular expression using the ignore-case
+ * and new-line flags
+ */
+int rxC(struct config* config, regex_t* rx) {
+  int flags = REG_NEWLINE;
+  if(config->ignorecase) flags |= REG_ICASE;
+  return regcomp(rx, config->expr, flags);
+}
 
 int showHelp() {
   p("gg: Quick Grep");
@@ -113,9 +122,14 @@ void fl_block_add(char* name, size_t len, struct fl_block* fl_block) {
   fl_block->ndx += len;
   fl_block->num++;
 }
+#define BUF_SIZE (1024 * 1024)
+struct fl_ctx {
+  regex_t rx;
+  char buf[BUF_SIZE];
+};
 struct fl_ {
   void* (*fn)(char* name, void* ctx);
-  struct config* config;
+  struct fl_ctx ctx;
 
   struct fl_block* first;
   struct fl_block* last;
@@ -184,7 +198,7 @@ void fl_threads_add(char* name, struct fl_threads* fl_threads) {
  */
 void* fl_thread_run(void* val) {
   struct fl_* fl_ = val;
-  return fl_walk(fl_, fl_->fn, fl_->config);
+  return fl_walk(fl_, fl_->fn, &fl_->ctx);
 }
 
 /*    way/
@@ -200,7 +214,7 @@ int fl_threads_run(struct fl_threads* fl_threads,
   for(int i = 0;i < fl_threads->fl_num;i++) {
     struct fl_* fl_ = fl_threads->fls[i];
     fl_->fn = cb;
-    fl_->config = config;
+    rxC(config, &fl_->ctx.rx);
     pthread_create(&threads[i], 0, fl_thread_run, fl_);
   }
   int ret;
@@ -220,8 +234,7 @@ int fts_err(FTSENT *node) {
 
 int skip(FTSENT *node) {
   if(node->fts_info == FTS_F) {
-    return 0;
-    return node->fts_statp->st_size > MAX_SIZE;
+    return node->fts_statp->st_size > MAX_FILE_SIZE;
   }
   int num = sizeof(IGNORE_DIRS)/sizeof(IGNORE_DIRS[0]);
   for(int i = 0;i < num;i++) {
@@ -255,39 +268,13 @@ int findFiles(struct fl_threads* fl_threads) {
   return 0;
 }
 
-
-void* print_names(char* name, void* ctx) {
-  printf("%s\n", name+2);
-  return 0;
-}
-
-/*    way/
- * validate the regular expression, then set up
- * the threads, find the files, and give them
- * to the threads to grep.
- */
-int search(struct config *config) {
-  regex_t rx;
-  int flags = REG_NEWLINE;
-  if(config->ignorecase) flags |= REG_ICASE;
-  int e = regcomp(&rx, config->expr, flags);
-  regfree(&rx);
-  if(e) return err("Bad regular expression '%s'", config->expr);
-
-  struct fl_threads* fl_threads = fl_threads_new();
-  findFiles(fl_threads);
-  return fl_threads_run(fl_threads, print_names, config);
-}
-
-
-static char buf[MAX_SIZE];
-int grep(regex_t* rx, char *path, char *currpath) {
+int grep(char* buf, regex_t* rx, char *path) {
   regmatch_t m[1];
 
-  FILE *f = fopen(currpath, "r");
+  FILE *f = fopen(path, "r");
   if(!f) return err("Failed opening %s", path);
   errno = 0;
-  int sz = fread(buf, 1, MAX_SIZE, f);
+  int sz = fread(buf, 1, BUF_SIZE, f);
   if(errno) {
     err("Failed reading %s", path);
     fclose(f);
@@ -329,39 +316,27 @@ int grep(regex_t* rx, char *path, char *currpath) {
   return 0;
 }
 
-int search_old(struct config *config) {
-  regex_t rx;
-  int flags = REG_NEWLINE;
-  if(config->ignorecase) flags |= REG_ICASE;
-  int e = regcomp(&rx, config->expr, flags);
-  if(e) return err("Bad regular expression '%s'", config->expr);
-
-  char * curr[] = {".", 0};
-  FTS *tree = fts_open(curr, FTS_LOGICAL, 0);
-  if(!tree) return err("Failed opening directory", NULL);
-
-  FTSENT *node;
-  errno = 0;
-  while((node = fts_read(tree))) {
-    errno = fts_err(node);
-    if(errno) {
-      err("Error walking %s", node->fts_path);
-      errno = 0;
-    } else if(skip(node)) {
-      if(node->fts_info == FTS_D) fts_set(tree, node, FTS_SKIP);
-    } else {
-      if(node->fts_info == FTS_F) {
-        grep(&rx, node->fts_path + 2, node->fts_accpath);
-      }
-    }
-  }
-  fts_close(tree);
-  regfree(&rx);
-  if(errno) return err("Failed walking directory", NULL);
-
-  return 0;
+#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
+void* fl_grep(char* name, void* ctx) {
+  struct fl_ctx* fl_ctx = ctx;
+  return (void*)grep(fl_ctx->buf, &fl_ctx->rx, name);
 }
 
+/*    way/
+ * validate the regular expression, then set up
+ * the threads, find the files, and give them
+ * to the threads to grep.
+ */
+int search(struct config *config) {
+  regex_t rx;
+  int e = rxC(config, &rx);
+  if(e) return err("Bad regular expression '%s'", config->expr);
+  regfree(&rx);
+
+  struct fl_threads* fl_threads = fl_threads_new();
+  findFiles(fl_threads);
+  return fl_threads_run(fl_threads, fl_grep, config);
+}
 
 
 /*    way/
