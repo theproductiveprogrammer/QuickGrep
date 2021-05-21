@@ -268,23 +268,8 @@ int findFiles(struct fl_threads* fl_threads) {
   return 0;
 }
 
-int grep(char* buf, regex_t* rx, char *path) {
+int grep(int sz, char* buf, regex_t* rx, char* path) {
   regmatch_t m[1];
-
-  FILE *f = fopen(path, "r");
-  if(!f) return err("Failed opening %s", path);
-  errno = 0;
-  int sz = fread(buf, 1, BUF_SIZE, f);
-  if(errno) {
-    err("Failed reading %s", path);
-    fclose(f);
-    return -1;
-  }
-  fclose(f);
-  buf[sz] = 0;
-
-  int chk = sz > 256 ? 256 : sz;
-  for(int i = 0;i < sz;i++) if(!buf[i]) return 0;
 
   int s = 0;
   int ls = 0;
@@ -316,10 +301,47 @@ int grep(char* buf, regex_t* rx, char *path) {
   return 0;
 }
 
+/*    way/
+ * read in the entire file int a buffer
+ * NB: we expect files to be smaller than the buffer
+ * hence the MAX_FILE_SIZE #define above
+ */
+int readFile(char* path, char* buf) {
+  FILE *f = fopen(path, "r");
+  if(!f) return err("Failed opening %s", path);
+  errno = 0;
+  int sz = fread(buf, 1, BUF_SIZE, f);
+  if(errno) {
+    err("Failed reading %s", path);
+    fclose(f);
+    return -1;
+  }
+  fclose(f);
+  buf[sz] = 0;
+  return sz;
+}
+
+/*    way/
+ * If there is a zero somewhere in the first few bytes of
+ * the file it's probably binary
+ */
+int looksBinary(int sz, char* buf) {
+  int chk = sz > 256 ? 256 : sz;
+  for(int i = 0;i < chk;i++) if(!buf[i]) return 1;
+  return 0;
+}
+
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 void* fl_grep(char* name, void* ctx) {
   struct fl_ctx* fl_ctx = ctx;
-  return (void*)grep(fl_ctx->buf, &fl_ctx->rx, name);
+
+  int sz = readFile(name, fl_ctx->buf);
+  if(sz < 0) return (void*)sz;
+  if(sz == 0) return 0;
+
+  if(looksBinary(sz, fl_ctx->buf)) return 0;
+
+  return (void*)grep(sz, fl_ctx->buf, &fl_ctx->rx, name);
 }
 
 /*    way/
@@ -338,6 +360,26 @@ int search(struct config *config) {
   return fl_threads_run(fl_threads, fl_grep, config);
 }
 
+/*    way/
+ * we read the input line-by-line, and check for regular expression
+ * on it.
+ */
+int searchPipe(struct config *config) {
+  regex_t rx;
+  int e = rxC(config, &rx);
+  if(e) return err("Bad regular expression '%s'", config->expr);
+
+  char buf[BUF_SIZE];
+  while(fgets(buf, BUF_SIZE, stdin) != NULL) if(!regexec(&rx, buf, 0, 0, 0)) printf("%s", buf);
+
+  regfree(&rx);
+  return 0;
+}
+
+/*    understand/
+ * if the input is not a terminal we assume it's a pipe
+ */
+int isPipe() { return !isatty(fileno(stdin)); }
 
 /*    way/
  * show help if needed or do the search
@@ -345,6 +387,7 @@ int search(struct config *config) {
 int main(int argc, char* argv[]) {
   struct config config = getConfig(argc, argv);
   if(config.help) return showHelp();
+  else if(isPipe()) return searchPipe(&config);
   else return search(&config);
 }
 
