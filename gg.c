@@ -8,7 +8,7 @@
 #include<unistd.h>
 #include<pthread.h>
 
-#define VERSION "1.0.0"
+#define VERSION "1.1.0"
 #define MAX_FILE_SIZE (2 * 1024 * 1024)
 
 /*    understand/
