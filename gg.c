@@ -6,6 +6,7 @@
 #include<errno.h>
 #include<regex.h>
 #include<unistd.h>
+#include<pthread.h>
 
 #define VERSION "1.0.0"
 #define MAX_SIZE (1024 * 1024)
@@ -113,6 +114,9 @@ void fl_block_add(char* name, size_t len, struct fl_block* fl_block) {
   fl_block->num++;
 }
 struct fl_ {
+  void* (*fn)(char* name, void* ctx);
+  struct config* config;
+
   struct fl_block* first;
   struct fl_block* last;
 };
@@ -136,14 +140,14 @@ void fl_add(char* name, struct fl_* fl_) {
   }
   return fl_block_add(name, len, fl_->last);
 }
-int fl_walk(struct fl_* fl_, int (*cb)(char* name, void* ctx), void* ctx) {
+void* fl_walk(struct fl_* fl_, void* (*cb)(char* name, void* ctx), void* ctx) {
   struct fl_block* fl_block = fl_->first;
   while(fl_block) {
     int ndx = 0;
     for(int i = 0;i < fl_block->num;i++) {
       char *name = fl_block->names + ndx;
-      int ret = cb(name, ctx);
-      if(ret == -1) return ret;
+      void* ret = cb(name, ctx);
+      if(ret) return ret;
       ndx += strlen(name) + 1;
     }
     fl_block = fl_block->nxt;
@@ -174,6 +178,36 @@ void fl_threads_add(char* name, struct fl_threads* fl_threads) {
   struct fl_* fl_ = fl_threads->fls[fl_threads->num_added % fl_threads->fl_num];
   fl_add(name, fl_);
   fl_threads->num_added++;
+}
+/*    way/
+ * run the given function against all the entries in the file-list
+ */
+void* fl_thread_run(void* val) {
+  struct fl_* fl_ = val;
+  return fl_walk(fl_, fl_->fn, fl_->config);
+}
+
+/*    way/
+ * create each new thread, passing it the context needed to run,
+ * and then wait for them all to finish - returning any errors
+ * found
+ */
+int fl_threads_run(struct fl_threads* fl_threads,
+    void* (*cb)(char* name, void* ctx),
+    struct config* config) {
+
+  pthread_t threads[fl_threads->fl_num];
+  for(int i = 0;i < fl_threads->fl_num;i++) {
+    struct fl_* fl_ = fl_threads->fls[i];
+    fl_->fn = cb;
+    fl_->config = config;
+    pthread_create(&threads[i], 0, fl_thread_run, fl_);
+  }
+  int ret;
+  for(int i = 0;i < fl_threads->fl_num;i++) {
+    ret |= pthread_join(threads[i], 0);
+  }
+  return ret;
 }
 
 /****** walk the directories finding files ******/
@@ -220,6 +254,31 @@ int findFiles(struct fl_threads* fl_threads) {
   if(errno) return err("Failed walking directory", NULL);
   return 0;
 }
+
+
+void* print_names(char* name, void* ctx) {
+  printf("%s\n", name+2);
+  return 0;
+}
+
+/*    way/
+ * validate the regular expression, then set up
+ * the threads, find the files, and give them
+ * to the threads to grep.
+ */
+int search(struct config *config) {
+  regex_t rx;
+  int flags = REG_NEWLINE;
+  if(config->ignorecase) flags |= REG_ICASE;
+  int e = regcomp(&rx, config->expr, flags);
+  regfree(&rx);
+  if(e) return err("Bad regular expression '%s'", config->expr);
+
+  struct fl_threads* fl_threads = fl_threads_new();
+  findFiles(fl_threads);
+  return fl_threads_run(fl_threads, print_names, config);
+}
+
 
 static char buf[MAX_SIZE];
 int grep(regex_t* rx, char *path, char *currpath) {
@@ -270,7 +329,7 @@ int grep(regex_t* rx, char *path, char *currpath) {
   return 0;
 }
 
-int search(struct config *config) {
+int search_old(struct config *config) {
   regex_t rx;
   int flags = REG_NEWLINE;
   if(config->ignorecase) flags |= REG_ICASE;
@@ -304,26 +363,13 @@ int search(struct config *config) {
 }
 
 
-int print_names(char* name, void* ctx) {
-  printf("%s\n", name);
-  return 0;
-}
-
 
 /*    way/
  * show help if needed or do the search
  */
 int main(int argc, char* argv[]) {
-  struct fl_threads* fl_threads = fl_threads_new();
-  findFiles(fl_threads);
-
-  for(int i = 0;i < fl_threads->fl_num;i++) {
-    fl_walk(fl_threads->fls[i], print_names, 0);
-  }
-
-  /*
   struct config config = getConfig(argc, argv);
   if(config.help) return showHelp();
-  else return search(&config);*/
+  else return search(&config);
 }
 
