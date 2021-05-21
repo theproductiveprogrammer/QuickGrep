@@ -14,6 +14,22 @@ vs
 $> gg int i
 ```
 
+## Vim Usage
+
+Add something like this to your `.vimrc`:
+
+```vim
+command! -nargs=+ Find cexpr system('gg ' . shellescape('<args>'))
+```
+
+And you can now use:
+
+```vim
+:Find int i
+```
+
+to quickly find relevant results from your current directory downward.
+
 ## Smart Case
 
 `gg` by default will perform a case-insensitive search but if you provide what looks like capital letters then it will perform a case-sensitive search. This is inspired by the `smartcase` option of vim and works really well.
