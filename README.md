@@ -1,6 +1,6 @@
 # Quick Grep
 
-**TL;DR** : A tiny (<200 loc) C file that does a fast grep with great defaults for programming.
+**TL;DR** : A tiny (<500 loc) C file that does a fast grep with great defaults for programming.
 
 🔍💨✨
 
