@@ -46,6 +46,7 @@ void dd(int num, char* msg) { printf("%d %s\n", num, msg); }
 struct config {
   int help;
   int ignorecase;
+  int inVert;
   char expr[1024];
 };
 
@@ -58,12 +59,15 @@ struct config getConfig(int argc, char* argv[]) {
   struct config r;
   r.help = argc < 2;
 
+  int a = 1;
+  if(argc > 1 && !strcmp(argv[1], "-v")) r.inVert = 1;
+  if(r.inVert) a++;
+
   char* expr = r.expr;
-  int i = 1;
-  while(i < argc) {
-    expr = stpcpy(expr, argv[i]);
-    i++;
-    if(i == argc) break;
+  while(a < argc) {
+    expr = stpcpy(expr, argv[a]);
+    a++;
+    if(a == argc) break;
     *expr = ' ';
     expr++;
   }
@@ -125,6 +129,7 @@ void fl_block_add(char* name, size_t len, struct fl_block* fl_block) {
   fl_block->num++;
 }
 struct fl_ctx {
+  int inVert;
   regex_t rx;
   char buf[BUF_SIZE];
 };
@@ -215,6 +220,7 @@ int fl_threads_run(struct fl_threads* fl_threads,
   for(int i = 0;i < fl_threads->fl_num;i++) {
     struct fl_* fl_ = fl_threads->fls[i];
     fl_->fn = cb;
+    fl_->ctx.inVert = config->inVert;
     rxC(config, &fl_->ctx.rx);
     pthread_create(&threads[i], 0, fl_thread_run, fl_);
   }
@@ -269,7 +275,21 @@ int findFiles(struct fl_threads* fl_threads) {
   return 0;
 }
 
-int grep(int sz, char* buf, regex_t* rx, char* path) {
+void showLine(char *path, char *buf, int sz, int ls, int s, int lnum) {
+  if(s - ls > 128) {
+    char op[128];
+    memcpy(op, buf+ls, 127);
+    op[124] = op[125] = op[126] = '.';
+    op[127] = 0;
+    printf("%s:%d:%s\n", path+2, lnum, op);
+  } else {
+    if(s < sz) buf[s] = 0;
+    printf("%s:%d:%s\n", path+2, lnum, buf+ls);
+    if(s < sz) buf[s] = '\n';
+  }
+}
+
+int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
   regmatch_t m[1];
 
   int s = 0;
@@ -278,6 +298,7 @@ int grep(int sz, char* buf, regex_t* rx, char* path) {
   while(regexec(rx, buf+s, 1, m, 0) == 0) {
     for(int i = 0;i < m->rm_so;i++) {
       if(buf[s+i] == '\n') {
+        if(inVert) showLine(path, buf, sz, ls, s+i, lnum);
         lnum++;
         ls = s+i+1;
       }
@@ -286,16 +307,18 @@ int grep(int sz, char* buf, regex_t* rx, char* path) {
     s += m->rm_eo;
     for(;s < sz;s++) if(buf[s] == '\n') break;
 
-    if(s - ls > 128) {
-      char op[128];
-      memcpy(op, buf+ls, 127);
-      op[124] = op[125] = op[126] = '.';
-      op[127] = 0;
-      printf("%s:%d:%s\n", path+2, lnum, op);
-    } else {
-      if(s < sz) buf[s] = 0;
-      printf("%s:%d:%s\n", path+2, lnum, buf+ls);
-      if(s < sz) buf[s] = '\n';
+    if(!inVert) showLine(path, buf, sz, ls, s, lnum);
+    s++; lnum++; ls = s;
+    if(s == sz) break;
+  }
+
+  if(inVert && s < sz) {
+    for(int i = 0;(s+i) < sz;i++) {
+      if(buf[s+i] == '\n') {
+        showLine(path, buf, sz, ls, s+i, lnum);
+        lnum++;
+        ls = s+i+1;
+      }
     }
   }
 
@@ -342,7 +365,7 @@ void* fl_grep(char* name, void* ctx) {
 
   if(looksBinary(sz, fl_ctx->buf)) return 0;
 
-  return (void*)grep(sz, fl_ctx->buf, &fl_ctx->rx, name);
+  return (void*)grep(fl_ctx->inVert, sz, fl_ctx->buf, &fl_ctx->rx, name);
 }
 
 /*    way/
@@ -371,7 +394,8 @@ int searchPipe(struct config *config) {
   if(e) return err("Bad regular expression '%s'", config->expr);
 
   char buf[BUF_SIZE];
-  while(fgets(buf, BUF_SIZE, stdin) != NULL) if(!regexec(&rx, buf, 0, 0, 0)) printf("%s", buf);
+  int c = config->inVert ? REG_NOMATCH : 0;
+  while(fgets(buf, BUF_SIZE, stdin) != NULL) if(regexec(&rx, buf, 0, 0, 0) == c) printf("%s", buf);
 
   regfree(&rx);
   return 0;
