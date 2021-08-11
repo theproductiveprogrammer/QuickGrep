@@ -93,7 +93,7 @@ unsigned int pcthread_get_num_procs()
  * and new-line flags
  */
 int rxC(struct config* config, regex_t* rx) {
-  int flags = REG_NEWLINE;
+  int flags = REG_NEWLINE | REG_EXTENDED;
   if(config->ignorecase) flags |= REG_ICASE;
   return regcomp(rx, config->expr, flags);
 }
