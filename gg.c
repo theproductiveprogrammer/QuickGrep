@@ -311,7 +311,7 @@ int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
 
     if(!inVert) showLine(path, buf, sz, ls, s, lnum);
     s++; lnum++; ls = s;
-    if(s == sz) break;
+    if(s >= sz) break;
   }
 
   if(inVert && s < sz) {
