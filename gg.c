@@ -61,9 +61,11 @@ struct config getConfig(int argc, char* argv[]) {
 
   int a = 1;
   if(argc > 1 && !strcmp(argv[1], "-v")) r.inVert = 1;
+  else r.inVert = 0;
   if(r.inVert) a++;
 
   char* expr = r.expr;
+  expr[0] = 0;
   while(a < argc) {
     expr = stpcpy(expr, argv[a]);
     a++;
@@ -224,7 +226,7 @@ int fl_threads_run(struct fl_threads* fl_threads,
     rxC(config, &fl_->ctx.rx);
     pthread_create(&threads[i], 0, fl_thread_run, fl_);
   }
-  int ret;
+  int ret = 0;
   for(int i = 0;i < fl_threads->fl_num;i++) {
     ret |= pthread_join(threads[i], 0);
   }
