@@ -35,8 +35,8 @@ to quickly find relevant results from your current directory downward.
 `gg` by default will perform a case-insensitive search but if you provide what looks like capital letters then it will perform a case-sensitive search. This is inspired by the `smartcase` option of vim and works really well.
 
 ```sh
-$> gg testing    # matches test, TEST, tEsT...
-$> gg Testing    # matches only Testing
+$> gg test    # matches test, TEST, tEsT...
+$> gg Test    # matches only Test
 ```
 
 ## Performance
