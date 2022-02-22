@@ -66,6 +66,11 @@ struct config getConfig(int argc, char* argv[]) {
   r.cwd = ".";
   int a = 1;
   while(a < argc) {
+    if(!strcmp(argv[a], "-h")) {
+      r.help = 1;
+      a++;
+      continue;
+    }
     if(!strcmp(argv[a], "-v")) {
       r.inVert = 1;
       a++;
