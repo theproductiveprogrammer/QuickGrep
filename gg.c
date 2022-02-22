@@ -47,22 +47,40 @@ struct config {
   int help;
   int ignorecase;
   int inVert;
+  char *cwd;
   char expr[1024];
 };
 
 /*    way/
  * if the user has not provided enough arguments,
- * show him the help. Otherwise concaternate
- * all the arguments as a single regular expression
+ * show him the help. Otherwise set the other
+ * parameters (-v[erbose] and -c[hange dir]),
+ * and concaternate all the rest of the arguments
+ * as a single regular expression.
  */
 struct config getConfig(int argc, char* argv[]) {
   struct config r;
   r.help = argc < 2;
 
+  r.inVert = 0;
+  r.cwd = ".";
   int a = 1;
-  if(argc > 1 && !strcmp(argv[1], "-v")) r.inVert = 1;
-  else r.inVert = 0;
-  if(r.inVert) a++;
+  while(a < argc) {
+    if(!strcmp(argv[a], "-v")) {
+      r.inVert = 1;
+      a++;
+      continue;
+    }
+    if(!strcmp(argv[a], "-c")) {
+      a++;
+      if(a < argc) {
+        r.cwd = argv[a];
+        a++;
+        continue;
+      }
+    }
+    break;
+  }
 
   char* expr = r.expr;
   expr[0] = 0;
@@ -252,8 +270,8 @@ int skip(FTSENT *node) {
   return 0;
 }
 
-int findFiles(struct fl_threads* fl_threads) {
-  char * curr[] = {".", 0};
+int findFiles(char *cwd, struct fl_threads* fl_threads) {
+  char * curr[] = {cwd, 0};
   FTS *tree = fts_open(curr, FTS_LOGICAL, 0);
   if(!tree) return err("Failed opening directory", NULL);
 
@@ -278,15 +296,16 @@ int findFiles(struct fl_threads* fl_threads) {
 }
 
 void showLine(char *path, char *buf, int sz, int ls, int s, int lnum) {
+  if(path[0] == '.' && path[1] == '/') path += 2;
   if(s - ls > 128) {
     char op[128];
     memcpy(op, buf+ls, 127);
     op[124] = op[125] = op[126] = '.';
     op[127] = 0;
-    printf("%s:%d:%s\n", path+2, lnum, op);
+    printf("%s:%d:%s\n", path, lnum, op);
   } else {
     if(s < sz) buf[s] = 0;
-    printf("%s:%d:%s\n", path+2, lnum, buf+ls);
+    printf("%s:%d:%s\n", path, lnum, buf+ls);
     if(s < sz) buf[s] = '\n';
   }
 }
@@ -382,7 +401,7 @@ int search(struct config *config) {
   regfree(&rx);
 
   struct fl_threads* fl_threads = fl_threads_new();
-  findFiles(fl_threads);
+  findFiles(config->cwd, fl_threads);
   return fl_threads_run(fl_threads, fl_grep, config);
 }
 
