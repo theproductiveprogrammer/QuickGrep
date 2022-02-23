@@ -54,7 +54,7 @@ struct config {
 /*    way/
  * if the user has not provided enough arguments,
  * show him the help. Otherwise set the other
- * parameters (-v[erbose] and -c[hange dir]),
+ * parameters (-v[invert] and -c[hange dir]),
  * and concaternate all the rest of the arguments
  * as a single regular expression.
  */
@@ -131,7 +131,7 @@ int showHelp() {
   p("      * uses sMartCase (ignores case by default)");
   p("");
   p("      -h: show help");
-  p("      -v: verbose");
+  p("      -v: invert search results");
   p("      -c: search in /path/...");
   p("");
 
