@@ -126,9 +126,14 @@ int rxC(struct config* config, regex_t* rx) {
 int showHelp() {
   p("gg: Quick Grep");
   p(VERSION);
-  p("$> gg <regular expression>");
-  p("      - finds all matches in code/text files");
-  p("      - uses sMartCase (ignores case by default)");
+  p("$> gg [-h | -v | -c /path/...] <regular expression>");
+  p("      * finds all matches in code/text files");
+  p("      * uses sMartCase (ignores case by default)");
+  p("");
+  p("      -h: show help");
+  p("      -v: verbose");
+  p("      -c: search in /path/...");
+  p("");
 
   return 0;
 }
