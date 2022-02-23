@@ -1,3 +1,36 @@
+---
+pdf_options:
+  format: a4
+  margin: 30mm 20mm
+  printBackground: true
+  headerTemplate: |-
+    <style>
+      .hdr, .ftr {
+        width: calc(100% - 30mm);
+        margin: 0 auto;
+        text-align: right;
+        font-family: system-ui;
+        font-size: 8px;
+        padding: 4px;
+      }
+      .hdr {
+        border-bottom: 1px solid #ededed;
+      }
+      .ftr {
+        border-top: 1px solid #ededed;
+      }
+    </style>
+    <div class="hdr">
+      <span><b>Quick Grep</b></span>
+      <span style="font-size:0.8em;color:#555">[v1.4.1]</span>
+    </section>
+  footerTemplate: |-
+    <div class="ftr">
+        Page <span class="pageNumber"></span>
+        of <span class="totalPages"></span>
+    </div>
+---
+
 # Quick Grep
 
 **TL;DR** : A tiny (<500 loc) C file that does a fast grep with great defaults for programming.
@@ -37,6 +70,26 @@ to quickly find relevant results from your current directory downward.
 ```sh
 $> gg test    # matches test, TEST, tEsT...
 $> gg Test    # matches only Test
+```
+
+## Run Directory
+
+`gg` searches in current directory but you can pass `-c ../some/other/path` to run the search in another directory.
+
+```sh
+$> gg test                    # searches in current directory and sub-directories
+$> gg -c ../some/path test    # searches in ../some/path and sub-directories
+```
+
+<div class="page-break"></div>
+
+## Invert Results
+
+It's also useful to search for lines that do *not* match a certain condition.
+
+```sh
+$> gg test     # matches test, TEST, tEst... etc
+$> gg -v test  # returns lines that do NOT match test, TEST, tEst... etc
 ```
 
 ## Performance
