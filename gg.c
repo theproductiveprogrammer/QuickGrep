@@ -105,7 +105,7 @@
  */
 static char* IGNORE_DIRS[] = {
   ".git", ".hg", ".svn", ".bzr",
-  "target", "node_modules"
+  ".next", "target", "node_modules", "venv", ".venv"
 };
 
 /*    understand/
