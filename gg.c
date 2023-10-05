@@ -531,10 +531,21 @@ int searchPipe(struct config *config) {
  * if the input is not a terminal and is
  * a FIFO (cat file | gg) or regular file (gg < file)
  */
-int isPipe() {
+int isPipeIn() {
   if(isatty(fileno(stdin))) return 0;
   struct stat stats;
   fstat(fileno(stdin), &stats);
+  return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
+}
+
+/*    understand/
+ * if the output is not a terminal and is
+ * a FIFO (gg | ...) or regular file (gg > file)
+ */
+int isPipeOut() {
+  if(isatty(fileno(stdout))) return 0;
+  struct stat stats;
+  fstat(fileno(stdout), &stats);
   return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
 }
 
@@ -543,8 +554,9 @@ int isPipe() {
  */
 int main(int argc, char* argv[]) {
   struct config config = getConfig(argc, argv);
+  if(!config.outFull && isPipeOut()) config.outFull = 1;
   if(config.help) return showHelp();
-  else if(isPipe()) return searchPipe(&config);
+  else if(isPipeIn()) return searchPipe(&config);
   else return search(&config);
 }
 
