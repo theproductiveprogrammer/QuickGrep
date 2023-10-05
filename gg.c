@@ -150,6 +150,7 @@ struct config getConfig(int argc, char* argv[]) {
   r.help = argc < 2;
 
   r.inVert = 0;
+  r.outFull = 0;
   r.cwd = ".";
   int a = 1;
   while(a < argc) {
