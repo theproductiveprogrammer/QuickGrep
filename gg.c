@@ -133,6 +133,7 @@ struct config {
   int help;
   int ignorecase;
   int inVert;
+  int outFull;
   char *cwd;
   char expr[1024];
 };
@@ -140,7 +141,7 @@ struct config {
 /*    way/
  * if the user has not provided enough arguments,
  * show him the help. Otherwise set the other
- * parameters (-v[invert] and -c[hange dir]),
+ * parameters (-f[ull], -v[invert] and -c[hange dir]),
  * and concaternate all the rest of the arguments
  * as a single regular expression.
  */
@@ -169,6 +170,11 @@ struct config getConfig(int argc, char* argv[]) {
         a++;
         continue;
       }
+    }
+    if(!strcmp(argv[a], "-f")) {
+      r.outFull = 1;
+      a++;
+      continue;
     }
     break;
   }
@@ -246,6 +252,7 @@ void fl_block_add(char* name, size_t len, struct fl_block* fl_block) {
 }
 struct fl_ctx {
   int inVert;
+  int outFull;
   regex_t rx;
   char buf[BUF_SIZE];
 };
@@ -337,6 +344,7 @@ int fl_threads_run(struct fl_threads* fl_threads,
     struct fl_* fl_ = fl_threads->fls[i];
     fl_->fn = cb;
     fl_->ctx.inVert = config->inVert;
+    fl_->ctx.outFull = config->outFull;
     rxC(config, &fl_->ctx.rx);
     pthread_create(&threads[i], 0, fl_thread_run, fl_);
   }
@@ -391,9 +399,9 @@ int findFiles(char *cwd, struct fl_threads* fl_threads) {
   return 0;
 }
 
-void showLine(char *path, char *buf, int sz, int ls, int s, int lnum) {
+void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnum) {
   if(path[0] == '.' && path[1] == '/') path += 2;
-  if(s - ls > 128) {
+  if(outFull == 0 && s - ls > 128) {
     char op[128];
     memcpy(op, buf+ls, 127);
     op[124] = op[125] = op[126] = '.';
@@ -406,7 +414,7 @@ void showLine(char *path, char *buf, int sz, int ls, int s, int lnum) {
   }
 }
 
-int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
+int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path) {
   regmatch_t m[1];
 
   int s = 0;
@@ -415,7 +423,7 @@ int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
   while(regexec(rx, buf+s, 1, m, 0) == 0) {
     for(int i = 0;i < m->rm_so;i++) {
       if(buf[s+i] == '\n') {
-        if(inVert) showLine(path, buf, sz, ls, s+i, lnum);
+        if(inVert) showLine(outFull, path, buf, sz, ls, s+i, lnum);
         lnum++;
         ls = s+i+1;
       }
@@ -424,7 +432,7 @@ int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
     s += m->rm_eo;
     for(;s < sz;s++) if(buf[s] == '\n') break;
 
-    if(!inVert) showLine(path, buf, sz, ls, s, lnum);
+    if(!inVert) showLine(outFull, path, buf, sz, ls, s, lnum);
     s++; lnum++; ls = s;
     if(s >= sz) break;
   }
@@ -432,7 +440,7 @@ int grep(int inVert, int sz, char* buf, regex_t* rx, char* path) {
   if(inVert && s < sz) {
     for(int i = 0;(s+i) < sz;i++) {
       if(buf[s+i] == '\n') {
-        showLine(path, buf, sz, ls, s+i, lnum);
+        showLine(outFull, path, buf, sz, ls, s+i, lnum);
         lnum++;
         ls = s+i+1;
       }
@@ -482,7 +490,7 @@ void* fl_grep(char* name, void* ctx) {
 
   if(looksBinary(sz, fl_ctx->buf)) return 0;
 
-  return (void*)grep(fl_ctx->inVert, sz, fl_ctx->buf, &fl_ctx->rx, name);
+  return (void*)grep(fl_ctx->outFull, fl_ctx->inVert, sz, fl_ctx->buf, &fl_ctx->rx, name);
 }
 
 /*    way/
