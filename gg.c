@@ -400,6 +400,19 @@ int findFiles(char *cwd, struct fl_threads* fl_threads) {
   return 0;
 }
 
+void showLineIn(int outFull, char *line) {
+  int l = strlen(line);
+  if(outFull == 0 && l > 128) {
+    char op[128];
+    memcpy(op, line, 127);
+    op[124] = op[125] = op[126] = '.';
+    op[127] = 0;
+    printf("%s", op);
+  } else {
+    printf("%s", line);
+  }
+}
+
 void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnum) {
   if(path[0] == '.' && path[1] == '/') path += 2;
   if(outFull == 0 && s - ls > 128) {
@@ -521,7 +534,7 @@ int searchPipe(struct config *config) {
 
   char buf[BUF_SIZE];
   int c = config->inVert ? REG_NOMATCH : 0;
-  while(fgets(buf, BUF_SIZE, stdin) != NULL) if(regexec(&rx, buf, 0, 0, 0) == c) printf("%s", buf);
+  while(fgets(buf, BUF_SIZE, stdin) != NULL) if(regexec(&rx, buf, 0, 0, 0) == c) showLineIn(config->outFull, buf);
 
   regfree(&rx);
   return 0;
