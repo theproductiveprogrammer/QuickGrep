@@ -407,7 +407,7 @@ void showLineIn(int outFull, char *line) {
     memcpy(op, line, 127);
     op[124] = op[125] = op[126] = '.';
     op[127] = 0;
-    printf("%s", op);
+    printf("%s\n", op);
   } else {
     printf("%s", line);
   }
