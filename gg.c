@@ -94,6 +94,9 @@
 #include<unistd.h>
 #include<pthread.h>
 
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
 #define VERSION "1.5.1"
 
 #define BUF_SIZE (2 * 1024 * 1024)
@@ -105,7 +108,8 @@
  */
 static char* IGNORE_DIRS[] = {
   ".git", ".hg", ".svn", ".bzr",
-  ".next", "target", "node_modules", "venv", ".venv"
+  ".next", "target", "node_modules", "venv", ".venv",
+  "__pycache__", ".pytest_cache", "build", "dist"
 };
 
 /*    understand/
@@ -413,17 +417,33 @@ void showLineIn(int outFull, char *line) {
   }
 }
 
-void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnum) {
+void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnum, int ms, int me) {
   if(path[0] == '.' && path[1] == '/') path += 2;
   if(outFull == 0 && s - ls > 128) {
     char op[128];
     memcpy(op, buf+ls, 127);
     op[124] = op[125] = op[126] = '.';
     op[127] = 0;
+    // For truncated output, we don't color complexity to avoid messing up logic
     printf("%s:%d:%s\n", path, lnum, op);
   } else {
     if(s < sz) buf[s] = 0;
-    printf("%s:%d:%s\n", path, lnum, buf+ls);
+    
+    printf("%s:%d:", path, lnum);
+    if(ms != -1 && me != -1 && ms >= ls && me <= s) {
+        // Print pre-match
+        fwrite(buf+ls, 1, ms-ls, stdout);
+        // Print match in RED
+        printf(ANSI_COLOR_RED);
+        fwrite(buf+ms, 1, me-ms, stdout);
+        printf(ANSI_COLOR_RESET);
+        // Print post-match
+        fwrite(buf+me, 1, s-me, stdout);
+    } else {
+        printf("%s", buf+ls);
+    }
+    printf("\n");
+
     if(s < sz) buf[s] = '\n';
   }
 }
@@ -437,16 +457,19 @@ int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path) {
   while(regexec(rx, buf+s, 1, m, 0) == 0) {
     for(int i = 0;i < m->rm_so;i++) {
       if(buf[s+i] == '\n') {
-        if(inVert) showLine(outFull, path, buf, sz, ls, s+i, lnum);
+        if(inVert) showLine(outFull, path, buf, sz, ls, s+i, lnum, -1, -1);
         lnum++;
         ls = s+i+1;
       }
     }
     // while(buf[ls] == ' ' || buf[ls] == '\t') ls++;
+    int match_s = s + m->rm_so;
+    int match_e = s + m->rm_eo;
+    
     s += m->rm_eo;
     for(;s < sz;s++) if(buf[s] == '\n') break;
 
-    if(!inVert) showLine(outFull, path, buf, sz, ls, s, lnum);
+    if(!inVert) showLine(outFull, path, buf, sz, ls, s, lnum, match_s, match_e);
     s++; lnum++; ls = s;
     if(s >= sz) break;
   }
@@ -454,7 +477,7 @@ int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path) {
   if(inVert && s < sz) {
     for(int i = 0;(s+i) < sz;i++) {
       if(buf[s+i] == '\n') {
-        showLine(outFull, path, buf, sz, ls, s+i, lnum);
+        showLine(outFull, path, buf, sz, ls, s+i, lnum, -1, -1);
         lnum++;
         ls = s+i+1;
       }
