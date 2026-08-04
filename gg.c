@@ -97,7 +97,7 @@
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define VERSION "1.5.1"
+#define VERSION "1.5.2"
 
 #define BUF_SIZE (2 * 1024 * 1024)
 #define MAX_FILE_SIZE BUF_SIZE
