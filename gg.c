@@ -111,7 +111,7 @@ static char* IGNORE_DIRS[] = {
   ".next", "target", "node_modules", "venv", ".venv",
   "__pycache__", ".pytest_cache", "build", "dist",
   ".playwright-mcp",
-  ".claude"
+  ".claude",
   ".next", "target", "node_modules", "venv", ".venv"
 };
 
