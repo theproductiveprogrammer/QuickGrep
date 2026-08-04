@@ -59,7 +59,7 @@
 //**
 //** ## Performance
 //**
-//** `gg` ignores directories like `.git`, or `node_modules`, or `target`, large files, and binary files, and this gives us quite a boost in many cases:
+//** `gg` ignores directories like `.git`, or `node_modules`, or `target`, and binary files, and this gives us quite a boost in many cases. Large text files are not skipped - they are streamed through a fixed buffer so memory stays flat:
 //**
 //** ```sh
 //** $> time grep -inR "int i" . > /dev/null
@@ -100,7 +100,6 @@
 #define VERSION "1.5.3"
 
 #define BUF_SIZE (2 * 1024 * 1024)
-#define MAX_FILE_SIZE BUF_SIZE
 
 /*    understand/
  * ignore some standard directories that are generally
@@ -371,10 +370,12 @@ int fts_err(FTSENT *node) {
   return 0;
 }
 
+// The problem is skipping ignored directory names (like .git) must not also
+// skip files that happen to share those names, and files themselves are never
+// skipped here - binary detection happens later when we sample their content.
+// flow: user runs gg <expr> -> main -> search -> findFiles -> skip() <-- HERE
 int skip(FTSENT *node) {
-  if(node->fts_info == FTS_F) {
-    return node->fts_statp->st_size > MAX_FILE_SIZE;
-  }
+  if(node->fts_info == FTS_F) return 0;
   int num = sizeof(IGNORE_DIRS)/sizeof(IGNORE_DIRS[0]);
   for(int i = 0;i < num;i++) {
     if(strcmp(IGNORE_DIRS[i], node->fts_name) == 0) return 1;
@@ -451,12 +452,17 @@ void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnu
   }
 }
 
-int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path) {
+// The problem is a big file now reaches us as multiple line-aligned chunks,
+// so line numbering must survive across calls. The way we solve this is by
+// taking the line number as an in/out pointer and counting every newline in
+// the chunk - even the ones after the last match - before returning.
+// flow: fl_grep -> grepFile -> grep() <-- HERE
+int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path, int* lnum_io) {
   regmatch_t m[1];
 
   int s = 0;
   int ls = 0;
-  int lnum = 1;
+  int lnum = *lnum_io;
   while(regexec(rx, buf+s, 1, m, 0) == 0) {
     for(int i = 0;i < m->rm_so;i++) {
       if(buf[s+i] == '\n') {
@@ -485,29 +491,12 @@ int grep(int outFull, int inVert, int sz, char* buf, regex_t* rx, char* path) {
         ls = s+i+1;
       }
     }
+  } else {
+    for(;s < sz;s++) if(buf[s] == '\n') lnum++;
   }
 
+  *lnum_io = lnum;
   return 0;
-}
-
-/*    way/
- * read in the entire file int a buffer
- * NB: we expect files to be smaller than the buffer
- * hence the MAX_FILE_SIZE #define above
- */
-int readFile(char* path, char* buf) {
-  FILE *f = fopen(path, "r");
-  if(!f) return err("Failed opening %s", path);
-  errno = 0;
-  int sz = fread(buf, 1, BUF_SIZE, f);
-  if(errno) {
-    err("Failed reading %s", path);
-    fclose(f);
-    return -1;
-  }
-  fclose(f);
-  buf[sz] = 0;
-  return sz;
 }
 
 /*    way/
@@ -520,17 +509,71 @@ int looksBinary(int sz, char* buf) {
   return 0;
 }
 
+// The problem is files bigger than our buffer used to be silently skipped, so
+// searching big logs or transcripts quietly returned nothing. The way we
+// solve this is by streaming every file through the buffer in line-aligned
+// chunks, sampling the first chunk to drop binaries.
+// Understand: a single line can outgrow the buffer (huge jsonl records) - we
+// then grow a heap buffer until the line fits so no match is missed.
+// flow: user runs gg <expr> -> main -> search -> fl_threads_run -> fl_thread_run -> fl_walk -> fl_grep -> grepFile() <-- HERE
+int grepFile(char* path, struct fl_ctx* fl_ctx) {
+  FILE *f = fopen(path, "r");
+  if(!f) return err("Failed opening %s", path);
+
+  char* buf = fl_ctx->buf;
+  char* heap = 0;
+  size_t cap = BUF_SIZE;
+  size_t carry = 0;
+  int lnum = 1;
+  int first = 1;
+  int ret = 0;
+
+  while(1) {
+    errno = 0;
+    size_t n = fread(buf + carry, 1, cap - 1 - carry, f);
+    if(errno) { ret = err("Failed reading %s", path); break; }
+    size_t sz = carry + n;
+    if(sz == 0) break;
+
+    if(first) {
+      first = 0;
+      if(looksBinary(sz, buf)) break;
+    }
+
+    size_t end = sz;
+    if(!feof(f)) {
+      while(end > 0 && buf[end-1] != '\n') end--;
+      if(end == 0) {
+        cap *= 2;
+        char* bigger = realloc(heap, cap);
+        if(!bigger) { ret = err("Out of memory reading %s", path); break; }
+        if(!heap) memcpy(bigger, buf, sz);
+        heap = bigger;
+        buf = heap;
+        carry = sz;
+        continue;
+      }
+    }
+
+    // Understand: buf[end] is the first byte of the carried partial line, so
+    // we must restore it after NUL-terminating the chunk for regexec
+    char kept = buf[end];
+    buf[end] = 0;
+    grep(fl_ctx->outFull, fl_ctx->inVert, end, buf, &fl_ctx->rx, path, &lnum);
+    buf[end] = kept;
+    carry = sz - end;
+    memmove(buf, buf + end, carry);
+  }
+
+  free(heap);
+  fclose(f);
+  return ret;
+}
+
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
+// flow: user runs gg <expr> -> main -> search -> fl_threads_run -> fl_thread_run -> fl_walk -> fl_grep() <-- HERE
 void* fl_grep(char* name, void* ctx) {
-  struct fl_ctx* fl_ctx = ctx;
-
-  int sz = readFile(name, fl_ctx->buf);
-  if(sz < 0) return (void*)sz;
-  if(sz == 0) return 0;
-
-  if(looksBinary(sz, fl_ctx->buf)) return 0;
-
-  return (void*)grep(fl_ctx->outFull, fl_ctx->inVert, sz, fl_ctx->buf, &fl_ctx->rx, name);
+  return (void*)grepFile(name, ctx);
 }
 
 /*    way/

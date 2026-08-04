@@ -133,7 +133,7 @@ $> gg -v test  # returns lines that do NOT match test, TEST, tEst... etc
 
 ## Performance
 
-`gg` ignores directories like `.git`, or `node_modules`, or `target`, large files, and binary files, and this gives us quite a boost in many cases:
+`gg` ignores directories like `.git`, or `node_modules`, or `target`, and binary files, and this gives us quite a boost in many cases. Large text files are not skipped - they are streamed through a fixed buffer so memory stays flat:
 
 ```sh
 $> time grep -inR "int i" . > /dev/null
