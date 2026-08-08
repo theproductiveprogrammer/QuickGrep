@@ -22,7 +22,7 @@ pdf_options:
     </style>
     <div class="hdr">
       <span><b>Quick Grep</b></span>
-      <span style="font-size:0.8em;color:#555">[v1.6.0]</span>
+      <span style="font-size:0.8em;color:#555">[v1.6.1]</span>
     </section>
   footerTemplate: |-
     <div class="ftr">

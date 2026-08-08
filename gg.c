@@ -103,7 +103,7 @@
 // only color when stdout is a terminal (set once in main).
 static int useColor = 0;
 
-#define VERSION "1.6.0"
+#define VERSION "1.6.1"
 
 #define BUF_SIZE (2 * 1024 * 1024)
 
