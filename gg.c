@@ -97,6 +97,12 @@
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+// The problem is coloring matches corrupts the byte stream when gg feeds
+// another program - `gg eve | gg -v event` can't filter 'event' once escape
+// codes split the word. The way we solve this is grep's --color=auto rule:
+// only color when stdout is a terminal (set once in main).
+static int useColor = 0;
+
 #define VERSION "1.6.0"
 
 #define BUF_SIZE (2 * 1024 * 1024)
@@ -110,8 +116,7 @@ static char* IGNORE_DIRS[] = {
   ".next", "target", "node_modules", "venv", ".venv",
   "__pycache__", ".pytest_cache", "build", "dist",
   ".playwright-mcp",
-  ".claude",
-  ".next", "target", "node_modules", "venv", ".venv"
+  ".claude"
 };
 
 /*    understand/
@@ -434,7 +439,7 @@ void showLine(int outFull, char *path, char *buf, int sz, int ls, int s, int lnu
     if(s < sz) buf[s] = 0;
     
     printf("%s:%d:", path, lnum);
-    if(ms != -1 && me != -1 && ms >= ls && me <= s) {
+    if(useColor && ms != -1 && me != -1 && ms >= ls && me <= s) {
         // Print pre-match
         fwrite(buf+ls, 1, ms-ls, stdout);
         // Print match in RED
@@ -636,6 +641,7 @@ int isPipeOut() {
  */
 int main(int argc, char* argv[]) {
   struct config config = getConfig(argc, argv);
+  useColor = isatty(fileno(stdout));
   if(!config.outFull && isPipeOut()) config.outFull = 1;
   if(config.help) return showHelp();
   else if(isPipeIn()) return searchPipe(&config);
